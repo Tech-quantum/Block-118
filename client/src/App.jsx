@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+// --- داده‌های تستی ---
 const mockUnits = [];
 for (let floor = 1; floor <= 10; floor++) {
   for (let unit = 1; unit <= 4; unit++) {
@@ -14,20 +15,104 @@ for (let floor = 1; floor <= 10; floor++) {
   }
 }
 
+// --- کامپوننت صفحه ورود ---
+function LoginPage({ onLogin }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // شبیه‌سازی بررسی رمز توسط سرور (بعدا به دیتابیس وصل میشه)
+    if (username === 'admin' && password === '1234') {
+      onLogin({ role: 'admin', name: 'مدیر ساختمان' });
+    } else if (username === '101' && password === '1234') {
+      onLogin({ role: 'resident', name: 'ساکن واحد ۱۰۱' });
+    } else {
+      setError('نام کاربری یا کد ورود اشتباه است.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Block-118 🏢</h1>
+          <p className="text-gray-500 text-sm">سامانه مدیریت هوشمند ساختمان</p>
+        </div>
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">نام کاربری</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-left font-sans"
+              dir="ltr"
+              placeholder="مثلا: admin یا 101"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">کد ورود</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-left font-sans"
+              dir="ltr"
+              placeholder="••••"
+              required
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm text-center bg-red-50 py-2 rounded-lg">{error}</p>}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition active:scale-95 shadow-md"
+          >
+            ورود به سیستم
+          </button>
+        </form>
+        <div className="mt-6 text-center text-xs text-gray-400 bg-gray-50 p-3 rounded-lg">
+          <p>برای تست: </p>
+          <p>مدیر: <b>admin</b> / <b>1234</b></p>
+          <p>ساکن: <b>101</b> / <b>1234</b></p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// --- کامپوننت اصلی اپلیکیشن ---
 export default function App() {
+  const [user, setUser] = useState(null); // وضعیت لاگین
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedUnit, setSelectedUnit] = useState(null);
 
+  // اگر کاربر لاگین نکرده باشد، صفحه ورود را نشان بده
+  if (!user) {
+    return <LoginPage onLogin={setUser} />;
+  }
+
+  // اگر کاربر لاگین کرده باشد، داشبورد را نشان بده
   return (
     <div className="min-h-screen pb-20 bg-gray-100">
-      <header className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-10">
-        <div className="flex justify-between items-center">
+      <header className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
+        <div>
           <h1 className="text-xl font-bold">Block-118 🏢</h1>
-          <span className="text-sm bg-blue-700 px-3 py-1 rounded-full">پنل مدیر</span>
+          <p className="text-xs text-blue-200 mt-1">{user.name} خوش آمدید</p>
         </div>
+        <button 
+          onClick={() => setUser(null)} 
+          className="text-sm bg-blue-700 hover:bg-red-500 transition-colors px-3 py-1.5 rounded-lg border border-blue-500"
+        >
+          خروج
+        </button>
       </header>
 
       <main className="p-4">
+        {/* تب داشبورد */}
         {activeTab === 'dashboard' && (
           <>
             <div className="grid grid-cols-2 gap-4 mb-6">
@@ -64,6 +149,7 @@ export default function App() {
           </>
         )}
 
+        {/* تب شارژها */}
         {activeTab === 'finance' && (
           <div>
             <h2 className="text-lg font-bold text-gray-800 mb-4">وضعیت شارژها (مهر ۱۴۰۴)</h2>
@@ -81,6 +167,7 @@ export default function App() {
           </div>
         )}
 
+        {/* تب درخواست‌ها */}
         {activeTab === 'requests' && (
           <div>
             <h2 className="text-lg font-bold text-gray-800 mb-4">درخواست‌های تعمیرات</h2>
@@ -98,6 +185,7 @@ export default function App() {
         )}
       </main>
 
+      {/* مودال جزئیات واحد */}
       {selectedUnit && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedUnit(null)}>
           <div className="bg-white rounded-xl w-full max-w-sm p-6 shadow-xl" onClick={e => e.stopPropagation()}>
@@ -112,6 +200,7 @@ export default function App() {
         </div>
       )}
 
+      {/* منوی پایین */}
       <nav className="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around p-2 pb-safe z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-gray-400'}`}>
           <span className="text-xl">🏢</span>
@@ -128,4 +217,4 @@ export default function App() {
       </nav>
     </div>
   );
-}
+                }
