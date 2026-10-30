@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-// تولید ۴۰ واحد تستی
 const mockUnits = [];
 for (let floor = 1; floor <= 10; floor++) {
   for (let unit = 1; unit <= 4; unit++) {
@@ -8,9 +7,9 @@ for (let floor = 1; floor <= 10; floor++) {
       id: `${floor}0${unit}`,
       unitNumber: `${floor}0${unit}`,
       floor: floor,
-      owner: floor % 3 === 0 ? 'علی رضایی' : null, // چند تا مالک تستی
+      owner: floor % 3 === 0 ? 'علی رضایی' : null,
       status: floor % 3 === 0 ? 'occupied' : 'vacant',
-      debt: floor % 2 === 0 ? 1500000 : 0 // چند تا بدهی تستی
+      debt: floor % 2 === 0 ? 1500000 : 0
     });
   }
 }
@@ -20,9 +19,7 @@ export default function App() {
   const [selectedUnit, setSelectedUnit] = useState(null);
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-100"> {/* pb-20 برای اینکه منوی پایین روی کارت‌ها نیفته */}
-      
-      {/* هدر */}
+    <div className="min-h-screen pb-20 bg-gray-100">
       <header className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-10">
         <div className="flex justify-between items-center">
           <h1 className="text-xl font-bold">Block-118 🏢</h1>
@@ -30,10 +27,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* محتوای هر تب */}
       <main className="p-4">
-        
-        {/* تب داشبورد */}
         {activeTab === 'dashboard' && (
           <>
             <div className="grid grid-cols-2 gap-4 mb-6">
@@ -70,7 +64,6 @@ export default function App() {
           </>
         )}
 
-        {/* تب شارژها */}
         {activeTab === 'finance' && (
           <div>
             <h2 className="text-lg font-bold text-gray-800 mb-4">وضعیت شارژها (مهر ۱۴۰۴)</h2>
@@ -88,7 +81,6 @@ export default function App() {
           </div>
         )}
 
-        {/* تب درخواست‌ها */}
         {activeTab === 'requests' && (
           <div>
             <h2 className="text-lg font-bold text-gray-800 mb-4">درخواست‌های تعمیرات</h2>
@@ -106,7 +98,6 @@ export default function App() {
         )}
       </main>
 
-      {/* مودال جزئیات واحد */}
       {selectedUnit && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedUnit(null)}>
           <div className="bg-white rounded-xl w-full max-w-sm p-6 shadow-xl" onClick={e => e.stopPropagation()}>
@@ -121,7 +112,6 @@ export default function App() {
         </div>
       )}
 
-      {/* منوی پایین (Bottom Navigation) */}
       <nav className="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around p-2 pb-safe z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-gray-400'}`}>
           <span className="text-xl">🏢</span>
@@ -138,4 +128,4 @@ export default function App() {
       </nav>
     </div>
   );
-          }
+}
