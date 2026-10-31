@@ -5,7 +5,7 @@ export async function loadUnits() {
   const snap = await getDocs(collection(db, "units"));
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber));
+    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true }));
 }
 
 export async function seedUnits() {
