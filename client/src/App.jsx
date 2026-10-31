@@ -1,20 +1,6 @@
 import { useState, useEffect } from 'react';
 import { login, logout, watchAuth } from './auth';
-
-// --- داده‌های تستی ---
-const mockUnits = [];
-for (let floor = 1; floor <= 10; floor++) {
-  for (let unit = 1; unit <= 4; unit++) {
-    mockUnits.push({
-      id: `${floor}0${unit}`,
-      unitNumber: `${floor}0${unit}`,
-      floor: floor,
-      owner: floor % 3 === 0 ? 'علی رضایی' : null,
-      status: floor % 3 === 0 ? 'occupied' : 'vacant',
-      debt: floor % 2 === 0 ? 1500000 : 0
-    });
-  }
-}
+import { loadUnits, seedUnits } from './units';
 
 // --- کامپوننت صفحه ورود ---
 function LoginPage() {
@@ -30,7 +16,7 @@ function LoginPage() {
     try {
       await login(username, password);
     } catch (err) {
-      setError('خطا: ' + err.code);
+      setError('نام کاربری یا کد ورود اشتباه است.');
     }
     setLoading(false);
   };
@@ -88,6 +74,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedUnit, setSelectedUnit] = useState(null);
 
+  const [units, setUnits] = useState([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  const [unitsError, setUnitsError] = useState('');
+  const [seeding, setSeeding] = useState(false);
+
   useEffect(() => {
     const unsub = watchAuth((fbUser) => {
       if (fbUser) {
@@ -99,11 +90,39 @@ export default function App() {
         );
       } else {
         setUser(null);
+        setUnits([]);
       }
       setChecking(false);
     });
     return unsub;
   }, []);
+
+  const fetchUnits = async () => {
+    setUnitsLoading(true);
+    setUnitsError('');
+    try {
+      setUnits(await loadUnits());
+    } catch (err) {
+      setUnitsError('خطا در خواندن اطلاعات: ' + (err.code || err.message));
+    }
+    setUnitsLoading(false);
+  };
+
+  useEffect(() => {
+    if (user) fetchUnits();
+  }, [user]);
+
+  const handleSeed = async () => {
+    setSeeding(true);
+    setUnitsError('');
+    try {
+      await seedUnits();
+      await fetchUnits();
+    } catch (err) {
+      setUnitsError('خطا در ساخت واحدها: ' + (err.code || err.message));
+    }
+    setSeeding(false);
+  };
 
   if (checking) {
     return (
@@ -116,6 +135,8 @@ export default function App() {
   if (!user) {
     return <LoginPage />;
   }
+
+  const debtors = units.filter((u) => u.debt > 0);
 
   return (
     <div className="min-h-screen pb-20 bg-gray-100">
@@ -133,25 +154,55 @@ export default function App() {
       </header>
 
       <main className="p-4">
+        {unitsError && (
+          <p className="text-red-500 text-sm text-center bg-red-50 py-2 px-3 rounded-lg mb-4">
+            {unitsError}
+          </p>
+        )}
+
         {/* تب داشبورد */}
         {activeTab === 'dashboard' && (
           <>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                 <p className="text-gray-500 text-sm">کل واحدها</p>
-                <p className="text-2xl font-bold text-gray-800">۴۰</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {units.length.toLocaleString('fa-IR')}
+                </p>
               </div>
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                 <p className="text-gray-500 text-sm">واحدهای بدهکار</p>
                 <p className="text-2xl font-bold text-red-500">
-                  {mockUnits.filter(u => u.debt > 0).length}
+                  {debtors.length.toLocaleString('fa-IR')}
                 </p>
               </div>
             </div>
 
             <h2 className="text-lg font-bold text-gray-800 mb-3">لیست واحدها</h2>
+
+            {unitsLoading && (
+              <p className="text-center text-gray-500 py-6">در حال بارگذاری واحدها...</p>
+            )}
+
+            {!unitsLoading && units.length === 0 && !unitsError && (
+              <div className="bg-white p-6 rounded-xl text-center border border-gray-200">
+                <p className="text-gray-600 mb-4">هنوز واحدی ثبت نشده است.</p>
+                {user.role === 'admin' ? (
+                  <button
+                    onClick={handleSeed}
+                    disabled={seeding}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-60"
+                  >
+                    {seeding ? 'در حال ساخت...' : 'ساخت ۴۰ واحد'}
+                  </button>
+                ) : (
+                  <p className="text-sm text-gray-400">با مدیر تماس بگیرید.</p>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
-              {mockUnits.map((unit) => (
+              {units.map((unit) => (
                 <div
                   key={unit.id}
                   onClick={() => setSelectedUnit(unit)}
@@ -173,9 +224,12 @@ export default function App() {
         {/* تب شارژها */}
         {activeTab === 'finance' && (
           <div>
-            <h2 className="text-lg font-bold text-gray-800 mb-4">وضعیت شارژها (مهر ۱۴۰۴)</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">وضعیت شارژها</h2>
+            {debtors.length === 0 && (
+              <p className="text-center text-gray-500 py-6">واحد بدهکاری وجود ندارد.</p>
+            )}
             <div className="space-y-3">
-              {mockUnits.filter(u => u.debt > 0).map(unit => (
+              {debtors.map((unit) => (
                 <div key={unit.id} className="bg-white p-4 rounded-lg shadow-sm border-r-4 border-red-500 flex justify-between items-center">
                   <div>
                     <p className="font-bold text-gray-800">واحد {unit.unitNumber}</p>
@@ -238,4 +292,4 @@ export default function App() {
       </nav>
     </div>
   );
-}
+            }
