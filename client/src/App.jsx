@@ -30,7 +30,7 @@ function LoginPage() {
     try {
       await login(username, password);
     } catch (err) {
-      setError('نام کاربری یا کد ورود اشتباه است.');
+      setError('خطا: ' + err.code);
     }
     setLoading(false);
   };
