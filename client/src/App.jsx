@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { login, logout, watchAuth } from './auth';
 
 // --- داده‌های تستی ---
 const mockUnits = [];
@@ -16,21 +17,22 @@ for (let floor = 1; floor <= 10; floor++) {
 }
 
 // --- کامپوننت صفحه ورود ---
-function LoginPage({ onLogin }) {
+function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // شبیه‌سازی بررسی رمز توسط سرور (بعدا به دیتابیس وصل میشه)
-    if (username === 'admin' && password === '1234') {
-      onLogin({ role: 'admin', name: 'مدیر ساختمان' });
-    } else if (username === '101' && password === '1234') {
-      onLogin({ role: 'resident', name: 'ساکن واحد ۱۰۱' });
-    } else {
+    setError('');
+    setLoading(true);
+    try {
+      await login(username, password);
+    } catch (err) {
       setError('نام کاربری یا کد ورود اشتباه است.');
     }
+    setLoading(false);
   };
 
   return (
@@ -68,34 +70,53 @@ function LoginPage({ onLogin }) {
           {error && <p className="text-red-500 text-sm text-center bg-red-50 py-2 rounded-lg">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition active:scale-95 shadow-md"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition active:scale-95 shadow-md disabled:opacity-60"
           >
-            ورود به سیستم
+            {loading ? 'در حال ورود...' : 'ورود به سیستم'}
           </button>
         </form>
-        <div className="mt-6 text-center text-xs text-gray-400 bg-gray-50 p-3 rounded-lg">
-          <p>برای تست: </p>
-          <p>مدیر: <b>admin</b> / <b>1234</b></p>
-          <p>ساکن: <b>101</b> / <b>1234</b></p>
-        </div>
       </div>
     </div>
   );
 }
 
-
 // --- کامپوننت اصلی اپلیکیشن ---
 export default function App() {
-  const [user, setUser] = useState(null); // وضعیت لاگین
+  const [user, setUser] = useState(null);
+  const [checking, setChecking] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedUnit, setSelectedUnit] = useState(null);
 
-  // اگر کاربر لاگین نکرده باشد، صفحه ورود را نشان بده
-  if (!user) {
-    return <LoginPage onLogin={setUser} />;
+  useEffect(() => {
+    const unsub = watchAuth((fbUser) => {
+      if (fbUser) {
+        const name = fbUser.email.split('@')[0];
+        setUser(
+          name === 'admin'
+            ? { role: 'admin', name: 'مدیر ساختمان' }
+            : { role: 'resident', name: `ساکن واحد ${name}` }
+        );
+      } else {
+        setUser(null);
+      }
+      setChecking(false);
+    });
+    return unsub;
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-500">
+        در حال بارگذاری...
+      </div>
+    );
   }
 
-  // اگر کاربر لاگین کرده باشد، داشبورد را نشان بده
+  if (!user) {
+    return <LoginPage />;
+  }
+
   return (
     <div className="min-h-screen pb-20 bg-gray-100">
       <header className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
@@ -103,8 +124,8 @@ export default function App() {
           <h1 className="text-xl font-bold">Block-118 🏢</h1>
           <p className="text-xs text-blue-200 mt-1">{user.name} خوش آمدید</p>
         </div>
-        <button 
-          onClick={() => setUser(null)} 
+        <button
+          onClick={() => logout()}
           className="text-sm bg-blue-700 hover:bg-red-500 transition-colors px-3 py-1.5 rounded-lg border border-blue-500"
         >
           خروج
@@ -131,8 +152,8 @@ export default function App() {
             <h2 className="text-lg font-bold text-gray-800 mb-3">لیست واحدها</h2>
             <div className="grid grid-cols-2 gap-3">
               {mockUnits.map((unit) => (
-                <div 
-                  key={unit.id} 
+                <div
+                  key={unit.id}
                   onClick={() => setSelectedUnit(unit)}
                   className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer active:scale-95 transition-transform"
                 >
@@ -217,4 +238,4 @@ export default function App() {
       </nav>
     </div>
   );
-                }
+}
