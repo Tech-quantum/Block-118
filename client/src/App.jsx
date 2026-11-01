@@ -1,6 +1,20 @@
 import { useState, useEffect } from 'react';
 import { login, logout, watchAuth } from './auth';
 import { loadUnits, loadMyUnit, seedUnits, updateUnit } from './units';
+import { loadRequests, addRequest, setRequestStatus } from './requests';
+
+const STATUS_LABELS = {
+  pending: 'در انتظار',
+  in_progress: 'در حال بررسی',
+  done: 'انجام شد',
+};
+const STATUS_STYLES = {
+  pending: 'bg-gray-100 text-gray-700',
+  in_progress: 'bg-yellow-100 text-yellow-700',
+  done: 'bg-green-100 text-green-700',
+};
+const fmtDate = (ts) =>
+  ts && ts.toDate ? ts.toDate().toLocaleDateString('fa-IR') : '';
 
 // --- کامپوننت صفحه ورود ---
 function LoginPage() {
@@ -83,6 +97,13 @@ export default function App() {
   const [form, setForm] = useState({ owner: '', status: 'vacant', debt: 0 });
   const [saving, setSaving] = useState(false);
 
+  const [requests, setRequests] = useState([]);
+  const [reqLoading, setReqLoading] = useState(false);
+  const [reqError, setReqError] = useState('');
+  const [showReqForm, setShowReqForm] = useState(false);
+  const [reqForm, setReqForm] = useState({ title: '', description: '' });
+  const [reqSaving, setReqSaving] = useState(false);
+
   useEffect(() => {
     const unsub = watchAuth((fbUser) => {
       if (fbUser) {
@@ -95,6 +116,7 @@ export default function App() {
       } else {
         setUser(null);
         setUnits([]);
+        setRequests([]);
       }
       setChecking(false);
     });
@@ -116,8 +138,24 @@ export default function App() {
     setUnitsLoading(false);
   };
 
+  const fetchRequests = async () => {
+    setReqLoading(true);
+    setReqError('');
+    try {
+      setRequests(
+        await loadRequests(user.role === 'admin' ? null : user.unit)
+      );
+    } catch (err) {
+      setReqError('خطا در خواندن درخواست‌ها: ' + (err.code || err.message));
+    }
+    setReqLoading(false);
+  };
+
   useEffect(() => {
-    if (user) fetchUnits();
+    if (user) {
+      fetchUnits();
+      fetchRequests();
+    }
   }, [user]);
 
   const handleSeed = async () => {
@@ -163,6 +201,37 @@ export default function App() {
       setUnitsError('خطا در ذخیره: ' + (err.code || err.message));
     }
     setSaving(false);
+  };
+
+  const submitRequest = async (e) => {
+    e.preventDefault();
+    const title = reqForm.title.trim();
+    if (!title) return;
+    setReqSaving(true);
+    setReqError('');
+    try {
+      await addRequest({
+        unit: user.unit,
+        title,
+        description: reqForm.description.trim(),
+      });
+      setReqForm({ title: '', description: '' });
+      setShowReqForm(false);
+      await fetchRequests();
+    } catch (err) {
+      setReqError('خطا در ثبت درخواست: ' + (err.code || err.message));
+    }
+    setReqSaving(false);
+  };
+
+  const changeStatus = async (id, status) => {
+    setReqError('');
+    try {
+      await setRequestStatus(id, status);
+      await fetchRequests();
+    } catch (err) {
+      setReqError('خطا در تغییر وضعیت: ' + (err.code || err.message));
+    }
   };
 
   if (checking) {
@@ -295,16 +364,103 @@ export default function App() {
         {/* تب درخواست‌ها */}
         {activeTab === 'requests' && (
           <div>
-            <h2 className="text-lg font-bold text-gray-800 mb-4">درخواست‌های تعمیرات</h2>
-            <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold mb-4 shadow-sm active:bg-blue-700">
-              + ثبت درخواست جدید
-            </button>
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex justify-between mb-2">
-                <span className="font-bold text-gray-800">خرابی آسانسور</span>
-                <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">در حال بررسی</span>
-              </div>
-              <p className="text-sm text-gray-500">واحد ۲۰۱ - ثبت شده در ۲ ساعت پیش</p>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">
+              {isAdmin ? 'درخواست‌های تعمیرات' : 'درخواست‌های من'}
+            </h2>
+
+            {reqError && (
+              <p className="text-red-500 text-sm text-center bg-red-50 py-2 px-3 rounded-lg mb-4">
+                {reqError}
+              </p>
+            )}
+
+            {!isAdmin && !showReqForm && (
+              <button
+                onClick={() => setShowReqForm(true)}
+                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold mb-4 shadow-sm active:bg-blue-700"
+              >
+                + ثبت درخواست جدید
+              </button>
+            )}
+
+            {!isAdmin && showReqForm && (
+              <form onSubmit={submitRequest} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-4 space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">عنوان</label>
+                  <input
+                    value={reqForm.title}
+                    onChange={(e) => setReqForm({ ...reqForm, title: e.target.value })}
+                    maxLength={100}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="مثلا: خرابی آسانسور"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">توضیحات</label>
+                  <textarea
+                    value={reqForm.description}
+                    onChange={(e) => setReqForm({ ...reqForm, description: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={reqSaving}
+                    className="flex-1 bg-green-600 text-white py-2 rounded-lg font-medium disabled:opacity-60"
+                  >
+                    {reqSaving ? 'در حال ثبت...' : 'ثبت'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowReqForm(false)}
+                    className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-medium"
+                  >
+                    انصراف
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {reqLoading && (
+              <p className="text-center text-gray-500 py-6">در حال بارگذاری...</p>
+            )}
+
+            {!reqLoading && requests.length === 0 && !reqError && (
+              <p className="text-center text-gray-500 py-6">درخواستی ثبت نشده است.</p>
+            )}
+
+            <div className="space-y-3">
+              {requests.map((r) => (
+                <div key={r.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start mb-2 gap-2">
+                    <span className="font-bold text-gray-800">{r.title}</span>
+                    <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ${STATUS_STYLES[r.status] || STATUS_STYLES.pending}`}>
+                      {STATUS_LABELS[r.status] || r.status}
+                    </span>
+                  </div>
+                  {r.description && (
+                    <p className="text-sm text-gray-600 mb-2">{r.description}</p>
+                  )}
+                  <p className="text-xs text-gray-400">
+                    واحد {r.unit}
+                    {fmtDate(r.createdAt) ? ` - ${fmtDate(r.createdAt)}` : ''}
+                  </p>
+                  {isAdmin && (
+                    <select
+                      value={r.status}
+                      onChange={(e) => changeStatus(r.id, e.target.value)}
+                      className="mt-3 w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+                    >
+                      <option value="pending">در انتظار</option>
+                      <option value="in_progress">در حال بررسی</option>
+                      <option value="done">انجام شد</option>
+                    </select>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
