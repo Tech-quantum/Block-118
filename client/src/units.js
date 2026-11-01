@@ -1,6 +1,7 @@
 import {
   collection,
-  getDocs,
+  getDocsFromServer,
+  getDoc,
   doc,
   setDoc,
   updateDoc,
@@ -8,12 +9,17 @@ import {
 import { db } from "./firebase";
 
 export async function loadUnits() {
-  const snap = await getDocs(collection(db, "units"));
+  const snap = await getDocsFromServer(collection(db, "units"));
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .sort((a, b) =>
       a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true })
     );
+}
+
+export async function loadMyUnit(unitNumber) {
+  const snap = await getDoc(doc(db, "units", unitNumber));
+  return snap.exists() ? [{ id: snap.id, ...snap.data() }] : [];
 }
 
 export async function seedUnits() {
