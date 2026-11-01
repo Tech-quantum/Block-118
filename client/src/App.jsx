@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { login, logout, watchAuth } from './auth';
-import { loadUnits, seedUnits, updateUnit } from './units';
+import { loadUnits, loadMyUnit, seedUnits, updateUnit } from './units';
 
 // --- کامپوننت صفحه ورود ---
 function LoginPage() {
@@ -90,7 +90,7 @@ export default function App() {
         setUser(
           name === 'admin'
             ? { role: 'admin', name: 'مدیر ساختمان' }
-            : { role: 'resident', name: `ساکن واحد ${name}` }
+            : { role: 'resident', name: `ساکن واحد ${name}`, unit: name }
         );
       } else {
         setUser(null);
@@ -105,7 +105,11 @@ export default function App() {
     setUnitsLoading(true);
     setUnitsError('');
     try {
-      setUnits(await loadUnits());
+      if (user.role === 'admin') {
+        setUnits(await loadUnits());
+      } else {
+        setUnits(await loadMyUnit(user.unit));
+      }
     } catch (err) {
       setUnitsError('خطا در خواندن اطلاعات: ' + (err.code || err.message));
     }
@@ -173,6 +177,7 @@ export default function App() {
     return <LoginPage />;
   }
 
+  const isAdmin = user.role === 'admin';
   const debtors = units.filter((u) => u.debt > 0);
 
   return (
@@ -200,31 +205,35 @@ export default function App() {
         {/* تب داشبورد */}
         {activeTab === 'dashboard' && (
           <>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <p className="text-gray-500 text-sm">کل واحدها</p>
-                <p className="text-2xl font-bold text-gray-800">
-                  {units.length.toLocaleString('fa-IR')}
-                </p>
+            {isAdmin && (
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  <p className="text-gray-500 text-sm">کل واحدها</p>
+                  <p className="text-2xl font-bold text-gray-800">
+                    {units.length.toLocaleString('fa-IR')}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  <p className="text-gray-500 text-sm">واحدهای بدهکار</p>
+                  <p className="text-2xl font-bold text-red-500">
+                    {debtors.length.toLocaleString('fa-IR')}
+                  </p>
+                </div>
               </div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <p className="text-gray-500 text-sm">واحدهای بدهکار</p>
-                <p className="text-2xl font-bold text-red-500">
-                  {debtors.length.toLocaleString('fa-IR')}
-                </p>
-              </div>
-            </div>
+            )}
 
-            <h2 className="text-lg font-bold text-gray-800 mb-3">لیست واحدها</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-3">
+              {isAdmin ? 'لیست واحدها' : 'واحد من'}
+            </h2>
 
             {unitsLoading && (
-              <p className="text-center text-gray-500 py-6">در حال بارگذاری واحدها...</p>
+              <p className="text-center text-gray-500 py-6">در حال بارگذاری...</p>
             )}
 
             {!unitsLoading && units.length === 0 && !unitsError && (
               <div className="bg-white p-6 rounded-xl text-center border border-gray-200">
                 <p className="text-gray-600 mb-4">هنوز واحدی ثبت نشده است.</p>
-                {user.role === 'admin' ? (
+                {isAdmin ? (
                   <button
                     onClick={handleSeed}
                     disabled={seeding}
@@ -261,9 +270,13 @@ export default function App() {
         {/* تب شارژها */}
         {activeTab === 'finance' && (
           <div>
-            <h2 className="text-lg font-bold text-gray-800 mb-4">وضعیت شارژها</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">
+              {isAdmin ? 'وضعیت شارژها' : 'شارژ واحد من'}
+            </h2>
             {debtors.length === 0 && (
-              <p className="text-center text-gray-500 py-6">واحد بدهکاری وجود ندارد.</p>
+              <p className="text-center text-gray-500 py-6">
+                {isAdmin ? 'واحد بدهکاری وجود ندارد.' : 'بدهی ندارید.'}
+              </p>
             )}
             <div className="space-y-3">
               {debtors.map((unit) => (
@@ -344,7 +357,7 @@ export default function App() {
             )}
 
             <div className="mt-6 flex gap-2">
-              {user.role === 'admin' && !editing && (
+              {isAdmin && !editing && (
                 <button onClick={() => setEditing(true)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-medium">
                   ویرایش
                 </button>
