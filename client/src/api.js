@@ -1,6 +1,7 @@
 const KEY = "block118_session";
 const listeners = new Set();
 let mem = null;
+let refreshing = null;
 
 const makeError = (code, status) =>
   Object.assign(new Error(code), { code, status });
@@ -44,32 +45,51 @@ export function subscribe(cb) {
   return () => listeners.delete(cb);
 }
 
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === KEY) {
+      mem = null;
+      notify();
+    }
+  });
+}
+
 async function getIdToken() {
   const s = getSession();
   if (!s) throw makeError("not-signed-in", 401);
   if (Date.now() < s.expiresAt - 60000) return s.idToken;
-  const r = await fetch("/api/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken: s.refreshToken }),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    clearSession();
-    throw makeError("session-expired", 401);
-  }
-  const next = {
-    ...s,
-    idToken: data.idToken,
-    refreshToken: data.refreshToken || s.refreshToken,
-    expiresAt: Date.now() + Number(data.expiresIn) * 1000,
-  };
-  saveSession(next, false);
-  return next.idToken;
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    try {
+      const r = await fetch("/api/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: s.refreshToken }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 401 || r.status === 403) {
+        clearSession();
+        throw makeError("session-expired", 401);
+      }
+      if (!r.ok) {
+        throw makeError("refresh-failed", r.status);
+      }
+      const next = {
+        ...s,
+        idToken: data.idToken,
+        refreshToken: data.refreshToken || s.refreshToken,
+        expiresAt: Date.now() + Number(data.expiresIn) * 1000,
+      };
+      saveSession(next, false);
+      return next.idToken;
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
 }
 
-export async function fsRequest(method, path, body) {
-  const token = await getIdToken();
+async function doFsRequest(token, method, path, body) {
   const r = await fetch("/api/fs", {
     method: "POST",
     headers: {
@@ -80,10 +100,29 @@ export async function fsRequest(method, path, body) {
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
-    const e = data.error || {};
-    throw makeError(e.status || String(r.status), r.status);
+    const e = (data && data.error) || {};
+    const code =
+      (e && e.message) ||
+      (typeof data.error === "string" ? data.error : null) ||
+      String(r.status);
+    throw makeError(code, r.status);
   }
   return data;
+}
+
+export async function fsRequest(method, path, body) {
+  const token = await getIdToken();
+  try {
+    return await doFsRequest(token, method, path, body);
+  } catch (e) {
+    if (e.status === 401) {
+      const s = getSession();
+      if (s) saveSession({ ...s, expiresAt: 0 }, false);
+      const fresh = await getIdToken();
+      return await doFsRequest(fresh, method, path, body);
+    }
+    throw e;
+  }
 }
 
 export function toValue(v) {
@@ -91,6 +130,7 @@ export function toValue(v) {
   if (typeof v === "string") return { stringValue: v };
   if (typeof v === "boolean") return { booleanValue: v };
   if (typeof v === "number") {
+    if (!Number.isFinite(v)) throw new Error("invalid-number");
     return Number.isInteger(v)
       ? { integerValue: String(v) }
       : { doubleValue: v };
@@ -117,6 +157,17 @@ function fromValue(v) {
     const d = new Date(v.timestampValue);
     return { seconds: Math.floor(d.getTime() / 1000), toDate: () => d };
   }
+  if ("mapValue" in v) {
+    const out = {};
+    Object.entries(v.mapValue.fields || {}).forEach(([k, val]) => {
+      out[k] = fromValue(val);
+    });
+    return out;
+  }
+  if ("arrayValue" in v) {
+    return (v.arrayValue.values || []).map(fromValue);
+  }
+  console.warn("Unsupported Firestore value:", Object.keys(v));
   return null;
 }
 
@@ -126,4 +177,4 @@ export function fromDoc(doc) {
     out[k] = fromValue(v);
   });
   return out;
-    }
+}

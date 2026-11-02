@@ -19,8 +19,8 @@ service cloud.firestore {
 
     // واحدها
     match /units/{unitId} {
-      // همه کاربران وارد شده می‌توانند لیست واحدها را ببینند
-      allow list: if request.auth != null;
+      // فقط ادمین می‌تواند لیست کامل واحدها را بگیرد
+      allow list: if isAdmin();
       
       // خواندن واحد: ادمین همه، ساکن فقط واحد خودش
       allow get: if isAdmin() || 
@@ -39,9 +39,16 @@ service cloud.firestore {
       allow get: if isAdmin() || 
                    (isResident() && resource.data.unit == getUserUnit());
       
-      // ساخت درخواست: ساکن فقط برای واحد خودش
-      allow create: if isResident() && 
-                       request.resource.data.unit == getUserUnit();
+      // ساخت درخواست با اعتبارسنجی کامل
+      allow create: if isResident() &&
+                       request.resource.data.unit == getUserUnit() &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.title is string &&
+                       request.resource.data.title.size() > 0 &&
+                       request.resource.data.title.size() <= 100 &&
+                       request.resource.data.description is string &&
+                       request.resource.data.description.size() <= 2000 &&
+                       request.resource.data.createdAt is timestamp;
       
       // تغییر وضعیت: فقط ادمین
       allow update: if isAdmin();
