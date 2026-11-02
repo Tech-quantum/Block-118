@@ -1,42 +1,51 @@
-import {
-  collection,
-  getDocsFromServer,
-  getDoc,
-  doc,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-import { db } from "./firebase";
+import { fsRequest, toFields, fromDoc } from "./api";
 
 export async function loadUnits() {
-  const snap = await getDocsFromServer(collection(db, "units"));
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
+  const data = await fsRequest("GET", "/documents/units?pageSize=300");
+  return (data.documents || [])
+    .map(fromDoc)
     .sort((a, b) =>
       a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true })
     );
 }
 
 export async function loadMyUnit(unitNumber) {
-  const snap = await getDoc(doc(db, "units", unitNumber));
-  return snap.exists() ? [{ id: snap.id, ...snap.data() }] : [];
+  try {
+    const d = await fsRequest(
+      "GET",
+      "/documents/units/" + encodeURIComponent(unitNumber)
+    );
+    return [fromDoc(d)];
+  } catch (err) {
+    if (err.status === 404) return [];
+    throw err;
+  }
 }
 
 export async function seedUnits() {
   for (let floor = 1; floor <= 10; floor++) {
     for (let u = 1; u <= 4; u++) {
       const unitNumber = `${floor}0${u}`;
-      await setDoc(doc(db, "units", unitNumber), {
-        unitNumber,
-        floor,
-        owner: null,
-        status: "vacant",
-        debt: 0,
+      await fsRequest("PATCH", "/documents/units/" + unitNumber, {
+        fields: toFields({
+          unitNumber,
+          floor,
+          owner: null,
+          status: "vacant",
+          debt: 0,
+        }),
       });
     }
   }
 }
 
 export async function updateUnit(unitNumber, data) {
-  await updateDoc(doc(db, "units", unitNumber), data);
+  const mask = Object.keys(data)
+    .map((k) => "updateMask.fieldPaths=" + encodeURIComponent(k))
+    .join("&");
+  await fsRequest(
+    "PATCH",
+    "/documents/units/" + encodeURIComponent(unitNumber) + "?" + mask,
+    { fields: toFields(data) }
+  );
 }
