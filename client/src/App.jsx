@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { login, logout, watchAuth } from './auth';
-import { loadUnits, loadMyUnit, seedUnits, updateUnit } from './units';
+import { loadUnits, loadMyUnit, updateUnit } from './units';
 import { loadRequests, addRequest, setRequestStatus } from './requests';
 
 const STATUS_LABELS = {
@@ -91,8 +91,7 @@ export default function App() {
   const [units, setUnits] = useState([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
   const [unitsError, setUnitsError] = useState('');
-  const [seeding, setSeeding] = useState(false);
-
+  
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ owner: '', status: 'vacant', debt: 0 });
   const [saving, setSaving] = useState(false);
@@ -158,19 +157,7 @@ export default function App() {
     }
   }, [user]);
 
-  const handleSeed = async () => {
-    setSeeding(true);
-    setUnitsError('');
-    try {
-      await seedUnits();
-      await fetchUnits();
-    } catch (err) {
-      setUnitsError('خطا در ساخت واحدها: ' + (err.code || err.message));
-    }
-    setSeeding(false);
-  };
-
-  const openUnit = (unit) => {
+    const openUnit = (unit) => {
     setSelectedUnit(unit);
     setEditing(false);
     setForm({
@@ -302,17 +289,7 @@ export default function App() {
             {!unitsLoading && units.length === 0 && !unitsError && (
               <div className="bg-white p-6 rounded-xl text-center border border-gray-200">
                 <p className="text-gray-600 mb-4">هنوز واحدی ثبت نشده است.</p>
-                {isAdmin ? (
-                  <button
-                    onClick={handleSeed}
-                    disabled={seeding}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-60"
-                  >
-                    {seeding ? 'در حال ساخت...' : 'ساخت ۴۰ واحد'}
-                  </button>
-                ) : (
-                  <p className="text-sm text-gray-400">با مدیر تماس بگیرید.</p>
-                )}
+                {!isAdmin && <p className="text-sm text-gray-400">با مدیر تماس بگیرید.</p>}
               </div>
             )}
 
@@ -354,7 +331,7 @@ export default function App() {
                     <p className="font-bold text-gray-800">واحد {unit.unitNumber}</p>
                     <p className="text-xs text-gray-500 mt-1">بدهی: {unit.debt.toLocaleString()} تومان</p>
                   </div>
-                  <button className="bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-medium">پرداخت</button>
+                  <button disabled title="به‌زودی" className="bg-gray-100 text-gray-400 px-3 py-1 rounded-md text-sm font-medium cursor-not-allowed">پرداخت (به‌زودی)</button>
                 </div>
               ))}
             </div>
