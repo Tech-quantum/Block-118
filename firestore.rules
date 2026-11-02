@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // بررسی نقش کاربر
+    function isAdmin() {
+      return request.auth != null && 
+             request.auth.token.email == 'admin@block118.app';
+    }
+
+    function isResident() {
+      return request.auth != null && 
+             request.auth.token.email.matches('^[0-9]{3}@block118.app$');
+    }
+
+    function getUserUnit() {
+      return request.auth.token.email.split('@')[0]; // مثلا "101"
+    }
+
+    // واحدها
+    match /units/{unitId} {
+      // همه کاربران وارد شده می‌توانند لیست واحدها را ببینند
+      allow list: if request.auth != null;
+      
+      // خواندن واحد: ادمین همه، ساکن فقط واحد خودش
+      allow get: if isAdmin() || 
+                    (isResident() && resource.data.unitNumber == getUserUnit());
+      
+      // ویرایش: فقط ادمین
+      allow create, update, delete: if isAdmin();
+    }
+
+    // درخواست‌های تعمیر
+    match /requests/{requestId} {
+      // ادمین همه را می‌بیند، ساکن فقط درخواست‌های خودش
+      allow list: if isAdmin() || 
+                     (isResident() && resource.data.unit == getUserUnit());
+      
+      allow get: if isAdmin() || 
+                   (isResident() && resource.data.unit == getUserUnit());
+      
+      // ساخت درخواست: ساکن فقط برای واحد خودش
+      allow create: if isResident() && 
+                       request.resource.data.unit == getUserUnit();
+      
+      // تغییر وضعیت: فقط ادمین
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // شارژها (آینده)
+    match /charges/{chargeId} {
+      allow list, get: if isAdmin() || 
+                          (isResident() && resource.data.unitNumber == getUserUnit());
+      allow write: if isAdmin();
+    }
+
+    // اطلاعیه‌ها (آینده)
+    match /announcements/{annId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+  }
+}
